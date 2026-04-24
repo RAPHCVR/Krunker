@@ -20,7 +20,7 @@ pnpm dev
 
 Le client écoute sur `http://localhost:5173` et proxifie `/api` + `/realtime` vers le serveur `http://localhost:2567`.
 
-Le serveur utilise PostgreSQL dès que `DATABASE_URL` est défini. Sans `DATABASE_URL`, il bascule uniquement en dev local sur un store mémoire: les comptes créés disparaissent au redémarrage. En production, `NODE_ENV=production` refuse de démarrer sans `SESSION_SECRET` et `DATABASE_URL`.
+Le serveur utilise PostgreSQL dès que `DATABASE_URL` est défini. Sans `DATABASE_URL`, il bascule uniquement en dev local sur un store mémoire: les comptes créés disparaissent au redémarrage. En production, `NODE_ENV=production` + `AUTH_STORE=postgres` refusent de démarrer sans `SESSION_SECRET` et `DATABASE_URL`.
 
 Exemple avec la base du cluster exposée temporairement en local:
 
@@ -68,3 +68,5 @@ Le serveur expose:
 - `/readyz`: readiness applicative; vérifie aussi `select 1` contre PostgreSQL quand le store Postgres est actif.
 
 Redis n’est pas requis tant que `krunker-server` reste à une réplique. Pour passer en multi-pod Colyseus, ajouter `@colyseus/redis-presence`, configurer le Redis du namespace `database`, puis changer la stratégie de déploiement et le routage WebSocket en conséquence.
+
+Les manifests Kubernetes forcent le profil prod: `NODE_ENV=production`, `AUTH_STORE=postgres`, redirect HTTPS Ingress, headers statiques HSTS côté NGINX, namespace en Pod Security `restricted`, PDB client/serveur, deux réplicas pour le client statique et serveur Colyseus mono-réplique volontaire.

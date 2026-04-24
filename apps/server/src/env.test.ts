@@ -16,6 +16,22 @@ describe('loadEnv', () => {
     expect(() => loadEnv()).toThrow('DATABASE_URL is required in production');
   });
 
+  it('requires the PostgreSQL auth store in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.SESSION_SECRET = 'test-secret';
+    process.env.DATABASE_URL = 'postgres://krunker:secret@localhost:5432/krunker';
+    process.env.AUTH_STORE = 'memory';
+
+    expect(() => loadEnv()).toThrow('AUTH_STORE=postgres is required in production');
+  });
+
+  it('requires a database URL when PostgreSQL auth is explicit', () => {
+    delete process.env.DATABASE_URL;
+    process.env.AUTH_STORE = 'postgres';
+
+    expect(() => loadEnv()).toThrow('DATABASE_URL is required when AUTH_STORE=postgres');
+  });
+
   it('parses a bounded database pool size', () => {
     process.env.DATABASE_POOL_MAX = '6';
 

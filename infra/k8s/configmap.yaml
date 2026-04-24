@@ -5,6 +5,7 @@ metadata:
   namespace: krunker
 data:
   NODE_ENV: production
+  AUTH_STORE: postgres
   HOST: 0.0.0.0
   PORT: "2567"
   DATABASE_POOL_MAX: "4"

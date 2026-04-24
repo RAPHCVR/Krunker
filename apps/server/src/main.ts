@@ -13,7 +13,8 @@ import { DeathmatchRoom } from './game/DeathmatchRoom.js';
 const env = loadEnv();
 const app = express();
 const httpServer = http.createServer(app);
-const store: UserStore = env.databaseUrl ? new PostgresUserStore(env.databaseUrl, { maxConnections: env.databasePoolMax }) : new MemoryUserStore();
+const store: UserStore =
+  env.authStore === 'postgres' ? new PostgresUserStore(env.databaseUrl!, { maxConnections: env.databasePoolMax }) : new MemoryUserStore();
 
 await store.migrate();
 await store.ready();
@@ -54,6 +55,7 @@ await gameServer.listen(env.port, env.host, undefined, () => {
       host: env.host,
       port: env.port,
       authStore: store.kind,
+      nodeEnv: env.nodeEnv,
       databasePoolMax: store.kind === 'postgres' ? env.databasePoolMax : undefined,
     }),
   );

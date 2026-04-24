@@ -1,6 +1,7 @@
 resources:
   - namespace.yaml
   - configmap.yaml
+  - availability.yaml
   - client.yaml
   - server.yaml
   - ingress.yaml

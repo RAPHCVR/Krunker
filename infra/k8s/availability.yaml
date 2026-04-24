@@ -1,0 +1,29 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: krunker-client
+  namespace: krunker
+  labels:
+    app.kubernetes.io/name: krunker-client
+    app.kubernetes.io/part-of: krunker-arena
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: krunker-client
+      app.kubernetes.io/part-of: krunker-arena
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: krunker-server
+  namespace: krunker
+  labels:
+    app.kubernetes.io/name: krunker-server
+    app.kubernetes.io/part-of: krunker-arena
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: krunker-server
+      app.kubernetes.io/part-of: krunker-arena
