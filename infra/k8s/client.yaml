@@ -13,7 +13,7 @@ metadata:
     keel.sh/trigger: poll
     keel.sh/pollSchedule: '@every 1m'
 spec:
-  replicas: 2
+  replicas: 1
   minReadySeconds: 5
   revisionHistoryLimit: 5
   selector:
@@ -48,11 +48,11 @@ spec:
               containerPort: 8080
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 10m
+              memory: 32Mi
             limits:
-              cpu: 500m
-              memory: 256Mi
+              cpu: 250m
+              memory: 128Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
