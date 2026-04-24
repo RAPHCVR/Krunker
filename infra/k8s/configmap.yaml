@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: krunker-config
+  namespace: krunker
+data:
+  NODE_ENV: production
+  HOST: 0.0.0.0
+  PORT: "2567"
+  PUBLIC_ORIGIN: https://krunker.raphcvr.me

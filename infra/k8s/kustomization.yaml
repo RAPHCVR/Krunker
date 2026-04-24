@@ -1,0 +1,6 @@
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - client.yaml
+  - server.yaml
+  - ingress.yaml

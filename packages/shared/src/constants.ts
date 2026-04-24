@@ -1,0 +1,52 @@
+export const GAME_VERSION = '0.1.0';
+
+export const GAMEPLAY = {
+  tickRate: 60,
+  maxPlayers: 12,
+  matchSeconds: 1800,
+  scoreLimit: 25,
+  playerRadius: 0.45,
+  playerHeight: 1.8,
+  eyeHeight: 1.62,
+  moveSpeed: 9.4,
+  sprintMultiplier: 1.62,
+  jumpVelocity: 8.8,
+  stepHeight: 0.25,
+  gravity: -24,
+  maxHealth: 100,
+  respawnSeconds: 3,
+  fireCooldownMs: 145,
+  weaponDamage: 34,
+  weaponRange: 95,
+  reloadMs: 900,
+  magazineSize: 12,
+  inputRateLimitPerSecond: 90,
+  maxInputCommandsPerTick: 3,
+} as const;
+
+export const MAP = {
+  size: 56,
+  floorY: 0,
+  spawnY: 0,
+  spawnPoints: [
+    { x: -20, y: 0, z: -20, yaw: 0.75 },
+    { x: 20, y: 0, z: 20, yaw: -2.35 },
+    { x: -20, y: 0, z: 20, yaw: 2.35 },
+    { x: 20, y: 0, z: -20, yaw: -0.75 },
+    { x: 0, y: 0, z: -24, yaw: 0 },
+    { x: 0, y: 0, z: 24, yaw: Math.PI },
+  ],
+  boxes: [
+    { x: 0, y: 0.55, z: 0, sx: 8, sy: 1.1, sz: 8 },
+    { x: -10, y: 0.45, z: -10, sx: 5, sy: 0.9, sz: 5 },
+    { x: 10, y: 0.45, z: 10, sx: 5, sy: 0.9, sz: 5 },
+    { x: -15, y: 1, z: 0, sx: 4, sy: 2, sz: 13 },
+    { x: 15, y: 1, z: 0, sx: 4, sy: 2, sz: 13 },
+    { x: 0, y: 1, z: -15, sx: 13, sy: 2, sz: 4 },
+    { x: 0, y: 1, z: 15, sx: 13, sy: 2, sz: 4 },
+    { x: -24, y: 1.2, z: -6, sx: 3, sy: 2.4, sz: 8 },
+    { x: 24, y: 1.2, z: 6, sx: 3, sy: 2.4, sz: 8 },
+    { x: -5, y: 0.35, z: 18, sx: 4, sy: 0.7, sz: 4 },
+    { x: 5, y: 0.35, z: -18, sx: 4, sy: 0.7, sz: 4 },
+  ],
+} as const;
