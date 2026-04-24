@@ -43,7 +43,7 @@ try {
   await cdp.send('Page.enable');
   await cdp.send('Page.bringToFront');
   await cdp.send('Page.navigate', { url: gameUrl });
-  await poll(cdp, 'Boolean(document.querySelector("#guest"))');
+  await poll(cdp, 'window.__arenaReady === true && Boolean(document.querySelector("#guest"))');
   await cdp.send('Runtime.evaluate', { expression: 'document.querySelector("#guest").click()' });
   await poll(cdp, 'Boolean(document.querySelector("#debug")?.textContent?.includes("sessionId"))');
 

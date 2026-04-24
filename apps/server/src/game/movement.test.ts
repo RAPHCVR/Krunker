@@ -110,6 +110,58 @@ describe('movement regression', () => {
     expect(inputSeq).toBe(delayedInputs.at(-1)!.seq);
     expect(Math.hypot(authoritative.x - predicted.x, authoritative.y - predicted.y, authoritative.z - predicted.z)).toBeLessThan(1e-9);
   });
+
+  it('converges after sustained jitter while circling obstacles like real players', () => {
+    const random = mulberry32(13);
+    const spawn = { x: -22, y: MAP.spawnY, z: -24 };
+    const inputs = Array.from({ length: 720 }, (_, tick): ClientInput => {
+      const yaw = Math.PI + Math.sin(tick / 44) * 1.15 + (random() - 0.5) * 0.03;
+      return {
+        seq: tick + 1,
+        forward: tick % 170 < 130 ? 1 : -0.45,
+        right: Math.sin(tick / 19) * 0.95,
+        jump: tick % 113 === 18 || tick % 211 === 45,
+        sprint: tick % 160 < 80,
+        yaw,
+        pitch: Math.sin(tick / 70) * 0.12,
+      };
+    });
+
+    let predicted = createMovementState(spawn, Math.PI);
+    for (const input of inputs) predicted = step(predicted, input);
+
+    let lastArrivalTick = 0;
+    const arrivals = inputs.map((input, index) => {
+      lastArrivalTick = Math.max(lastArrivalTick, index + jitterDelay(index, random));
+      return { atTick: lastArrivalTick, input };
+    });
+    let nextArrival = 0;
+    const queue: ClientInput[] = [];
+    let authoritative = createMovementState(spawn, Math.PI);
+    let latestInput: ClientInput = { seq: 0, forward: 0, right: 0, jump: false, sprint: false, yaw: Math.PI, pitch: 0 };
+    let inputSeq = 0;
+    let maxQueueLength = 0;
+
+    for (let serverTick = 0; serverTick < inputs.length + 180; serverTick += 1) {
+      while (true) {
+        const arrival = arrivals[nextArrival];
+        if (!arrival || arrival.atTick > serverTick) break;
+        queue.push(arrival.input);
+        nextArrival += 1;
+      }
+      maxQueueLength = Math.max(maxQueueLength, queue.length);
+      const result = applyQueuedHumanInputs(authoritative, queue, latestInput, inputSeq);
+      authoritative = result.movement;
+      latestInput = result.latestInput;
+      inputSeq = result.inputSeq;
+      expect(isInsideAnyObstacle(authoritative), `serverTick=${serverTick} seq=${inputSeq}`).toBe(false);
+      if (inputSeq === inputs.at(-1)!.seq && queue.length === 0) break;
+    }
+
+    expect(inputSeq).toBe(inputs.at(-1)!.seq);
+    expect(maxQueueLength).toBeLessThanOrEqual(GAMEPLAY.tickRate * 2);
+    expect(Math.hypot(authoritative.x - predicted.x, authoritative.y - predicted.y, authoritative.z - predicted.z)).toBeLessThan(1e-9);
+  });
 });
 
 function isInsideAnyObstacle(state: MovementState): boolean {
@@ -122,4 +174,20 @@ function isInsideAnyObstacle(state: MovementState): boolean {
     const overlapsY = state.y < top - 0.001 && state.y + GAMEPLAY.playerHeight > bottom + 0.001;
     return overlapsXZ && overlapsY;
   });
+}
+
+function jitterDelay(index: number, random: () => number): number {
+  if (index % 157 === 0) return 18;
+  if (index % 53 === 0) return 9;
+  return Math.floor(random() * 5);
+}
+
+function mulberry32(seed: number): () => number {
+  return () => {
+    seed += 0x6d2b79f5;
+    let next = seed;
+    next = Math.imul(next ^ (next >>> 15), next | 1);
+    next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+    return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+  };
 }

@@ -12,6 +12,7 @@
     "test": "corepack pnpm -r test",
     "smoke:browser": "node scripts/browser-smoke.mjs",
     "smoke:browser:respawn": "node -e \"process.env.SMOKE_RESPAWN='1'; import('./scripts/browser-smoke.mjs')\"",
+    "smoke:latency": "corepack pnpm --filter @krunker-arena/shared build && node scripts/latency-playtest.mjs",
     "clean": "corepack pnpm -r clean"
   },
   "devDependencies": {

@@ -12,6 +12,7 @@ declare global {
       setLook: (yaw: number, pitch: number) => void;
       snapshot: () => Record<string, unknown>;
     };
+    __arenaReady?: boolean;
   }
 }
 
@@ -36,7 +37,6 @@ const ui = new GameUi({
   start: (displayName) => void startGame(displayName),
 });
 app.appendChild(ui.root);
-await ui.hydrate();
 
 const network = new GameNetwork({
   onPlayers: (nextPlayers, sessionId) => {
@@ -77,6 +77,9 @@ if (debugEnabled) {
     snapshot: () => renderer.debugSnapshot(),
   };
 }
+
+await ui.hydrate();
+window.__arenaReady = true;
 
 async function startGame(displayName: string): Promise<void> {
   ui.showMessage('Connexion au serveur temps réel...');
