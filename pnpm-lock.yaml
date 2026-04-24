@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   '@colyseus/core@0.16.24':
-    hash: 5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1
+    hash: 893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60
     path: patches/@colyseus__core@0.16.24.patch
 
 importers:
@@ -67,13 +67,13 @@ importers:
     dependencies:
       '@colyseus/core':
         specifier: ^0.16.24
-        version: 0.16.24(patch_hash=5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)
+        version: 0.16.24(patch_hash=893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)
       '@colyseus/schema':
         specifier: ^3.0.76
         version: 3.0.76
       '@colyseus/ws-transport':
         specifier: ^0.16.5
-        version: 0.16.5(@colyseus/core@0.16.24(patch_hash=5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0))
+        version: 0.16.5(@colyseus/core@0.16.24(patch_hash=893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0))
       '@krunker-arena/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -1827,7 +1827,7 @@ snapshots:
 
   '@colyseus/clock@1.0.1': {}
 
-  '@colyseus/core@0.16.24(patch_hash=5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)':
+  '@colyseus/core@0.16.24(patch_hash=893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)':
     dependencies:
       '@colyseus/greeting-banner': 2.0.6
       '@colyseus/msgpackr': 1.11.2
@@ -1853,9 +1853,9 @@ snapshots:
     dependencies:
       '@colyseus/clock': 1.0.1
 
-  '@colyseus/ws-transport@0.16.5(@colyseus/core@0.16.24(patch_hash=5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0))':
+  '@colyseus/ws-transport@0.16.5(@colyseus/core@0.16.24(patch_hash=893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0))':
     dependencies:
-      '@colyseus/core': 0.16.24(patch_hash=5740c7627f3964b25cc4cacb95fe3a4214252a38e731b29bac82c44e289ee9a1)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)
+      '@colyseus/core': 0.16.24(patch_hash=893cfafdb70533b92ed52fe04db636146e306094c15ccde57286a0b07da10a60)(@colyseus/schema@3.0.76)(@pm2/io@6.1.0)
       '@types/ws': 8.18.1
       ws: 8.20.0
     transitivePeerDependencies:
