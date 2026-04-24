@@ -13,16 +13,25 @@ import { DeathmatchRoom } from './game/DeathmatchRoom.js';
 const env = loadEnv();
 const app = express();
 const httpServer = http.createServer(app);
-const store: UserStore = env.databaseUrl ? new PostgresUserStore(env.databaseUrl) : new MemoryUserStore();
+const store: UserStore = env.databaseUrl ? new PostgresUserStore(env.databaseUrl, { maxConnections: env.databasePoolMax }) : new MemoryUserStore();
 
 await store.migrate();
+await store.ready();
 
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
 app.get('/healthz', (_request, response) => response.json({ ok: true }));
-app.get('/readyz', (_request, response) => response.json({ ok: true }));
+app.get('/readyz', async (_request, response) => {
+  try {
+    await store.ready();
+    return response.json({ ok: true, authStore: store.kind });
+  } catch (error) {
+    console.error(JSON.stringify({ level: 'error', message: 'readiness_failed', error: error instanceof Error ? error.message : String(error) }));
+    return response.status(503).json({ ok: false });
+  }
+});
 app.use('/api', createAuthRouter(store, env.sessionSecret, env.nodeEnv === 'production'));
 
 const errorHandler: ErrorRequestHandler = (error, _request, response, _next) => {
@@ -38,7 +47,16 @@ const gameServer = new Server({
 gameServer.define('deathmatch', DeathmatchRoom);
 
 await gameServer.listen(env.port, env.host, undefined, () => {
-  console.log(JSON.stringify({ level: 'info', message: 'server_started', host: env.host, port: env.port }));
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      message: 'server_started',
+      host: env.host,
+      port: env.port,
+      authStore: store.kind,
+      databasePoolMax: store.kind === 'postgres' ? env.databasePoolMax : undefined,
+    }),
+  );
 });
 
 const shutdown = async (signal: string) => {

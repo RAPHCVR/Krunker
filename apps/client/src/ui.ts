@@ -31,7 +31,7 @@ export class GameUi {
             <button id="register" class="secondary">Register</button>
           </div>
           <button id="guest" class="contrast">Jouer en invité</button>
-          <small id="status">Local sans Postgres: comptes en mémoire jusqu'au restart serveur. ZQSD/AZERTY ou WASD, espace, shift sprint, clic, R.</small>
+          <small id="status">Production: comptes persistants PostgreSQL. Local: définir DATABASE_URL pour éviter le store mémoire de dev. ZQSD/AZERTY ou WASD, espace, shift sprint, clic, R.</small>
         </article>
       </section>
       <div class="hud-top">

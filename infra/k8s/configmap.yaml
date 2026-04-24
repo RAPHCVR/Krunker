@@ -7,4 +7,5 @@ data:
   NODE_ENV: production
   HOST: 0.0.0.0
   PORT: "2567"
+  DATABASE_POOL_MAX: "4"
   PUBLIC_ORIGIN: https://krunker.raphcvr.me

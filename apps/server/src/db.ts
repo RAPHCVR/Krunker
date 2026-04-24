@@ -5,18 +5,31 @@ import type { AuthUser } from '@krunker-arena/shared';
 export type UserRecord = AuthUser & { passwordHash: string };
 
 export interface UserStore {
+  readonly kind: 'postgres' | 'memory';
   migrate(): Promise<void>;
+  ready(): Promise<void>;
   findByUsername(username: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
   createUser(input: { username: string; displayName: string; passwordHash: string }): Promise<UserRecord>;
   close(): Promise<void>;
 }
 
+export type PostgresUserStoreOptions = {
+  maxConnections: number;
+};
+
 export class PostgresUserStore implements UserStore {
+  readonly kind = 'postgres' as const;
   private readonly pool: Pool;
 
-  constructor(databaseUrl: string) {
-    this.pool = new Pool({ connectionString: databaseUrl, max: 8 });
+  constructor(databaseUrl: string, options: PostgresUserStoreOptions) {
+    this.pool = new Pool({
+      connectionString: databaseUrl,
+      max: options.maxConnections,
+      application_name: 'krunker-arena-server',
+      connectionTimeoutMillis: 2_000,
+      idleTimeoutMillis: 30_000,
+    });
   }
 
   async migrate(): Promise<void> {
@@ -30,6 +43,10 @@ export class PostgresUserStore implements UserStore {
         updated_at timestamptz not null default now()
       );
     `);
+  }
+
+  async ready(): Promise<void> {
+    await this.pool.query('select 1');
   }
 
   async findByUsername(username: string): Promise<UserRecord | null> {
@@ -57,9 +74,12 @@ export class PostgresUserStore implements UserStore {
 }
 
 export class MemoryUserStore implements UserStore {
+  readonly kind = 'memory' as const;
   private readonly users = new Map<string, UserRecord>();
 
   async migrate(): Promise<void> {}
+
+  async ready(): Promise<void> {}
 
   async findByUsername(username: string): Promise<UserRecord | null> {
     return [...this.users.values()].find((user) => user.username === username) ?? null;
