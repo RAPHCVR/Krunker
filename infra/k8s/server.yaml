@@ -32,6 +32,10 @@ spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
       terminationGracePeriodSeconds: 30
+      # Keep the authoritative room host close to the current player base.
+      # Do not raise replicas without Colyseus-aware room routing.
+      nodeSelector:
+        topology.kubernetes.io/region: paris
       imagePullSecrets:
         - name: ghcr-secret
       securityContext:
