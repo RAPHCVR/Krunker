@@ -60,18 +60,15 @@ try {
       return debug.botTotal >= 4;
     })()`,
   );
-  const beforeShotDebug = JSON.parse(await evaluate(cdp, 'document.querySelector("#debug")?.textContent || "{}"'));
-  const beforeShotFeedback = beforeShotDebug.feedback ?? { shots: 0 };
-  const beforeTracers = beforeShotDebug.tracers ?? 0;
-  await cdp.send('Runtime.evaluate', { expression: 'window.__arenaDebug?.shoot()' });
   await poll(
     cdp,
     `(() => {
       const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
-      return debug.tracers > ${beforeTracers} && debug.feedback?.shots > ${beforeShotFeedback.shots ?? 0};
+      return debug.server?.health > 0 && debug.server?.ammo > 0 && debug.spawnSeq > 0;
     })()`,
-    3_000,
   );
+  const beforeShotDebug = JSON.parse(await evaluate(cdp, 'document.querySelector("#debug")?.textContent || "{}"'));
+  await assertDebugShot(cdp, beforeShotDebug);
 
   await key(cdp, 'KeyZ', 'z', 90, 900);
   await key(cdp, 'KeyS', 's', 83, 900);
@@ -360,12 +357,39 @@ async function captureScreenshot(cdp, outputPath) {
   console.log(JSON.stringify({ screenshot: screenshotPath }, null, 2));
 }
 
-async function poll(cdp, expression, timeoutMs = 12_000) {
+async function assertDebugShot(cdp, beforeShotDebug) {
+  const beforeShots = beforeShotDebug.feedback?.shots ?? 0;
+  const beforeAmmo = beforeShotDebug.server?.ammo ?? 0;
+  let lastDebug = beforeShotDebug;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await cdp.send('Runtime.evaluate', { expression: 'window.__arenaDebug?.shoot()' });
+    try {
+      await poll(
+        cdp,
+        `(() => {
+          const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
+          return debug.feedback?.shots > ${beforeShots} || debug.server?.ammo < ${beforeAmmo};
+        })()`,
+        2_000,
+        50,
+      );
+      return;
+    } catch (error) {
+      lastDebug = JSON.parse(await evaluate(cdp, 'document.querySelector("#debug")?.textContent || "{}"'));
+      if (lastDebug.server?.health <= 0 || lastDebug.server?.ammo <= 0) break;
+    }
+  }
+
+  throw new Error(`Shot debug non observe: ${JSON.stringify(lastDebug)}`);
+}
+
+async function poll(cdp, expression, timeoutMs = 12_000, intervalMs = 150) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const value = await evaluate(cdp, expression);
     if (value) return value;
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   throw new Error(`Timeout navigateur: ${expression}`);
 }

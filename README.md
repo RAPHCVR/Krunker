@@ -58,6 +58,8 @@ pnpm --filter @krunker-arena/client build
 
 `VITE_REALTIME_URL` accepte `ws:`, `wss:`, `http:` ou `https:`; `http:` et `https:` sont convertis en WebSocket côté client. Le manifest expose aussi `krunker-rt.raphcvr.me` comme host realtime dédié. Si ce host passe encore par Cloudflare Tunnel, un p95 autour de quelques centaines de millisecondes reste attendu. Pour viser quelques dizaines de ms, faire pointer ce même host vers une route directe, idéalement géographiquement proche des joueurs, et garder Cloudflare seulement pour le site statique/API non critique.
 
+Fallback Cloudflare Tunnel actuel: ajouter une règle de tunnel avant le wildcard `*.raphcvr.me` pour router `krunker-rt.raphcvr.me` directement vers `http://krunker-server.krunker.svc.cluster.local:2567`. Cette règle évite l’ingress nginx pour le WebSocket, mais elle reste limitée par Cloudflare Tunnel; elle ne remplace pas un vrai origin public proche des joueurs.
+
 ## Validation
 
 ```powershell
