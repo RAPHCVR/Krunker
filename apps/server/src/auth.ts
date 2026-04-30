@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
-import { Router, type Request, type Response } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { sanitizeDisplayName, type AuthResponse, type AuthUser } from '@krunker-arena/shared';
 import type { UserStore } from './db.js';
@@ -15,8 +15,9 @@ const credentialsSchema = z.object({
 
 export function createAuthRouter(store: UserStore, sessionSecret: string, secureCookies: boolean): Router {
   const router = Router();
+  const credentialsRateLimit = createRateLimit({ limit: 20, windowMs: 5 * 60 * 1000 });
 
-  router.post('/auth/register', async (request, response, next) => {
+  router.post('/auth/register', credentialsRateLimit, async (request, response, next) => {
     try {
       const input = credentialsSchema.parse(request.body);
       const username = input.username.toLowerCase();
@@ -31,7 +32,7 @@ export function createAuthRouter(store: UserStore, sessionSecret: string, secure
     }
   });
 
-  router.post('/auth/login', async (request, response, next) => {
+  router.post('/auth/login', credentialsRateLimit, async (request, response, next) => {
     try {
       const input = credentialsSchema.pick({ username: true, password: true }).parse(request.body);
       const user = await store.findByUsername(input.username.toLowerCase());
@@ -96,4 +97,41 @@ function cookieOptions(secure: boolean) {
 
 function toAuthResponse(user: AuthUser): AuthResponse {
   return { user: { id: user.id, username: user.username, displayName: user.displayName } };
+}
+
+type RateLimitOptions = {
+  limit: number;
+  windowMs: number;
+};
+
+function createRateLimit(options: RateLimitOptions) {
+  const buckets = new Map<string, { count: number; resetAt: number }>();
+
+  return (request: Request, response: Response, next: NextFunction) => {
+    const now = Date.now();
+    const key = request.ip ?? request.socket.remoteAddress ?? 'unknown';
+    let bucket = buckets.get(key);
+
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + options.windowMs };
+      buckets.set(key, bucket);
+      pruneExpiredBuckets(buckets, now);
+    }
+
+    bucket.count += 1;
+    if (bucket.count > options.limit) {
+      response.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+      response.status(429).json({ error: 'RATE_LIMITED' });
+      return;
+    }
+
+    next();
+  };
+}
+
+function pruneExpiredBuckets(buckets: Map<string, { count: number; resetAt: number }>, now: number): void {
+  if (buckets.size < 10_000) return;
+  for (const [key, bucket] of buckets) {
+    if (bucket.resetAt <= now) buckets.delete(key);
+  }
 }

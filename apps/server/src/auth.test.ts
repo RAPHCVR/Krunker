@@ -33,4 +33,17 @@ describe('auth routes', () => {
     const response = await request(app).post('/api/auth/login').send({ username: 'missing', password: 'password123' });
     expect(response.status).toBe(401);
   });
+
+  it('rate limits repeated credential attempts from the same IP', async () => {
+    const app = testApp();
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await request(app).post('/api/auth/login').send({ username: 'missing', password: 'password123' });
+      expect(response.status).toBe(401);
+    }
+
+    const limited = await request(app).post('/api/auth/login').send({ username: 'missing', password: 'password123' });
+    expect(limited.status).toBe(429);
+    expect(limited.body.error).toBe('RATE_LIMITED');
+    expect(limited.headers['retry-after']).toBeDefined();
+  });
 });

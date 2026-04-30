@@ -8,6 +8,8 @@ COPY apps/client/package.json apps/client/package.json
 RUN pnpm install --frozen-lockfile
 COPY packages/shared packages/shared
 COPY apps/client apps/client
+ARG VITE_REALTIME_URL
+ENV VITE_REALTIME_URL=${VITE_REALTIME_URL}
 RUN pnpm --filter @krunker-arena/shared build && pnpm --filter @krunker-arena/client build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine

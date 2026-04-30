@@ -74,6 +74,19 @@ export class GameNetwork {
 }
 
 function realtimeEndpoint(): string {
+  const configuredEndpoint = import.meta.env.VITE_REALTIME_URL?.trim();
+  if (configuredEndpoint) return normalizeRealtimeEndpoint(configuredEndpoint);
+
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${window.location.host}/realtime`;
+}
+
+function normalizeRealtimeEndpoint(endpoint: string): string {
+  const url = new URL(endpoint, window.location.href);
+  if (url.protocol === 'http:') url.protocol = 'ws:';
+  if (url.protocol === 'https:') url.protocol = 'wss:';
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    throw new Error(`Unsupported realtime endpoint protocol: ${url.protocol}`);
+  }
+  return url.toString().replace(/\/$/, '');
 }

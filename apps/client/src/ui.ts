@@ -27,22 +27,21 @@ export class GameUi {
       <section class="menu" id="menu">
         <article class="menu-card">
           <h1>Krunker Arena</h1>
-          <p>FPS arena low-poly, rapide, auto-hébergé. Connecte-toi ou lance une session invitée.</p>
-          <input id="username" autocomplete="username" placeholder="username" value="raphcvr" />
-          <input id="displayName" autocomplete="nickname" placeholder="display name" value="Raph" />
-          <input id="password" autocomplete="current-password" type="password" placeholder="mot de passe" value="password123" />
+          <p>Session persistante ou partie invitée instantanée.</p>
+          <input id="username" autocomplete="username" placeholder="username" />
+          <input id="displayName" autocomplete="nickname" placeholder="display name" />
+          <input id="password" autocomplete="current-password" type="password" placeholder="mot de passe" />
           <div class="grid">
             <button id="login">Login</button>
             <button id="register" class="secondary">Register</button>
           </div>
           <button id="guest" class="contrast">Jouer en invité</button>
-          <small id="status">Production: comptes persistants PostgreSQL. Local: définir DATABASE_URL pour éviter le store mémoire de dev. ZQSD/AZERTY ou WASD, espace, shift sprint, clic, R.</small>
+          <small id="status">Prêt.</small>
         </article>
       </section>
       <div class="hud-top">
         <div class="chip" id="health">HP 100</div>
         <div class="chip" id="ammo">12 / 12</div>
-        <div class="chip">ZQSD/AZERTY · Shift sprint · Space · R</div>
       </div>
       <div class="scoreboard" id="scoreboard"></div>
       <pre class="debug hidden" id="debug"></pre>

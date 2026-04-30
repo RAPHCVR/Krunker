@@ -6,6 +6,7 @@ import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { z } from 'zod';
 import { createAuthRouter } from './auth.js';
+import { buildAllowedOrigins, createCorsMiddleware } from './cors.js';
 import { MemoryUserStore, PostgresUserStore, type UserStore } from './db.js';
 import { loadEnv } from './env.js';
 import { DeathmatchRoom } from './game/DeathmatchRoom.js';
@@ -21,6 +22,7 @@ await store.ready();
 
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(createCorsMiddleware(buildAllowedOrigins(env.publicOrigin)));
 app.use(express.json({ limit: '64kb' }));
 app.use(cookieParser());
 app.get('/healthz', (_request, response) => response.json({ ok: true }));

@@ -45,6 +45,18 @@ pnpm smoke:browser:respawn
 ```
 
 Si tu veux cibler un environnement déjà lancé sans gestion automatique des services locaux, utiliser `GAME_URL` ou `SMOKE_MANAGE_SERVERS=0`.
+Pour forcer une taille de viewport pendant le smoke, définir `SMOKE_VIEWPORT_WIDTH` et `SMOKE_VIEWPORT_HEIGHT`.
+
+## Latence temps réel
+
+Le client utilise par défaut le même host que la page et se connecte à `/realtime`. Pour une prod FPS, le chemin temps réel doit éviter les tunnels/proxys HTTP partagés. Définir `VITE_REALTIME_URL` au build du client pour pointer vers un endpoint Colyseus direct:
+
+```powershell
+$env:VITE_REALTIME_URL = "wss://krunker-rt.raphcvr.me"
+pnpm --filter @krunker-arena/client build
+```
+
+`VITE_REALTIME_URL` accepte `ws:`, `wss:`, `http:` ou `https:`; `http:` et `https:` sont convertis en WebSocket côté client. Le manifest expose aussi `krunker-rt.raphcvr.me` comme host realtime dédié. Si ce host passe encore par Cloudflare Tunnel, un p95 autour de quelques centaines de millisecondes reste attendu. Pour viser quelques dizaines de ms, faire pointer ce même host vers une route directe, idéalement géographiquement proche des joueurs, et garder Cloudflare seulement pour le site statique/API non critique.
 
 ## Validation
 
@@ -55,6 +67,8 @@ pnpm test
 pnpm build
 pnpm smoke:browser
 ```
+
+Le test `pnpm smoke:latency` cible maintenant un profil FPS compétitif par défaut: `MAX_ACK_P95_MS=80`, `MAX_ACK_MAX_MS=250`, `MAX_PATCH_P95_MS=80`. Pour un simple smoke d’infra lente ou tunnelisée, surcharger explicitement ces seuils au lieu de considérer ce profil comme validé.
 
 ## Production
 

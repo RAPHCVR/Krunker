@@ -21,6 +21,7 @@ env:
   CLIENT_IMAGE: ghcr.io/raphcvr/krunker-client
   SERVER_IMAGE: ghcr.io/raphcvr/krunker-server
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  VITE_REALTIME_URL: ${{ vars.VITE_REALTIME_URL }}
 
 jobs:
   validate:
@@ -80,5 +81,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: ${{ matrix.name == 'client' && format('VITE_REALTIME_URL={0}', env.VITE_REALTIME_URL) || '' }}
           sbom: true
           provenance: true

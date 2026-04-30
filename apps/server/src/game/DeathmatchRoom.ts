@@ -15,6 +15,7 @@ import {
 import { GameState, PlayerState } from './state.js';
 import { directionFromAngles, findSpawn, raycastPlayerHit } from './math.js';
 import { applyQueuedHumanInputs } from './inputQueue.js';
+import { parseClientInput, parseJoinMatchOptions, parseShootMessage } from './messages.js';
 
 type PlayerRuntime = {
   bot: boolean;
@@ -40,9 +41,9 @@ export class DeathmatchRoom extends Room<GameState> {
     this.setSimulationInterval((deltaMs) => this.update(deltaMs), 1000 / GAMEPLAY.tickRate);
     this.setPatchRate(1000 / GAMEPLAY.tickRate);
 
-    this.onMessage('joinMatch', (client, payload: JoinMatchOptions) => this.handleJoinMatch(client, payload));
-    this.onMessage('input', (client, payload: ClientInput) => this.handleInput(client, payload));
-    this.onMessage('shoot', (client, payload: ShootMessage) => this.handleShoot(client, payload));
+    this.onMessage('joinMatch', (client, payload) => this.handleJoinMatch(client, payload));
+    this.onMessage('input', (client, payload) => this.handleInput(client, payload));
+    this.onMessage('shoot', (client, payload) => this.handleShoot(client, payload));
     this.onMessage('reload', (client) => this.handleReload(client));
     if (process.env.ENABLE_DEBUG_CHEATS === 'true') this.onMessage('debugKill', (client) => this.handleDebugKill(client));
 
@@ -50,10 +51,11 @@ export class DeathmatchRoom extends Room<GameState> {
   }
 
   onJoin(client: Client, options: Partial<JoinMatchOptions>): void {
+    const joinOptions = parseJoinMatchOptions(options);
     const player = new PlayerState();
     const spawn = findSpawn(this.state.players.size);
     player.id = client.sessionId;
-    player.name = sanitizeDisplayName(options.displayName ?? 'Guest');
+    player.name = sanitizeDisplayName(joinOptions.displayName);
     player.isBot = false;
     player.health = GAMEPLAY.maxHealth;
     player.ammo = GAMEPLAY.magazineSize;
@@ -86,18 +88,20 @@ export class DeathmatchRoom extends Room<GameState> {
     this.runtime.set(id, runtime);
   }
 
-  private handleJoinMatch(client: Client, payload: JoinMatchOptions): void {
+  private handleJoinMatch(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (player) player.name = sanitizeDisplayName(payload.displayName);
+    if (player) player.name = sanitizeDisplayName(parseJoinMatchOptions(payload).displayName);
   }
 
-  private handleInput(client: Client, payload: ClientInput): void {
+  private handleInput(client: Client, payload: unknown): void {
+    const parsedInput = parseClientInput(payload);
+    if (!parsedInput) return;
     const player = this.state.players.get(client.sessionId);
     const runtime = this.runtime.get(client.sessionId);
     if (!player || !runtime || !player.alive) return;
-    if (payload.spawnSeq !== player.spawnSeq) return;
+    if (parsedInput.spawnSeq !== player.spawnSeq) return;
     if (!this.allowInput(runtime)) return;
-    const input = this.sanitizeInput(payload, runtime);
+    const input = this.sanitizeInput(parsedInput, runtime);
     const lastQueued = runtime.inputQueue.at(-1);
     if (input.seq <= player.inputSeq || (lastQueued && input.seq <= lastQueued.seq)) return;
     runtime.inputQueue.push(input);
@@ -112,10 +116,12 @@ export class DeathmatchRoom extends Room<GameState> {
     this.syncPlayerMovement(player, runtime.movement, result.inputSeq);
   }
 
-  private handleShoot(client: Client, payload: ShootMessage): void {
+  private handleShoot(client: Client, payload: unknown): void {
+    const shootMessage = parseShootMessage(payload);
+    if (!shootMessage) return;
     const shooter = this.state.players.get(client.sessionId);
     const runtime = this.runtime.get(client.sessionId);
-    if (shooter && runtime) this.fireFromPlayer(client.sessionId, shooter, runtime, payload);
+    if (shooter && runtime) this.fireFromPlayer(client.sessionId, shooter, runtime, shootMessage);
   }
 
   private handleReload(client: Client): void {
@@ -239,7 +245,7 @@ export class DeathmatchRoom extends Room<GameState> {
     let targetId: string | undefined;
     let targetDistance = Number.POSITIVE_INFINITY;
     for (const [id, player] of this.state.players) {
-      if (id.startsWith('bot-') || !player.alive) continue;
+      if (player.isBot || !player.alive) continue;
       const distance = Math.hypot(player.x - bot.x, player.z - bot.z);
       if (distance < targetDistance) {
         targetDistance = distance;

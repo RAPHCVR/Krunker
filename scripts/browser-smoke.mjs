@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -12,6 +12,7 @@ const cdpPort = Number(process.env.CDP_PORT ?? 9230 + Math.floor(Math.random() *
 const chromePath = process.env.CHROME_PATH ?? findChromePath();
 const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'krunker-cdp-'));
 const smokeRespawn = process.env.SMOKE_RESPAWN === '1';
+const viewport = readViewport();
 const browserEvents = [];
 const managedProcesses = [];
 let nextId = 1;
@@ -46,6 +47,7 @@ try {
   await cdp.send('Runtime.enable');
   await cdp.send('Log.enable');
   await cdp.send('Page.enable');
+  if (viewport) await cdp.send('Emulation.setDeviceMetricsOverride', viewport);
   await cdp.send('Page.bringToFront');
   await cdp.send('Page.navigate', { url: gameUrl });
   await poll(cdp, 'window.__arenaReady === true && Boolean(document.querySelector("#guest"))');
@@ -57,6 +59,18 @@ try {
       const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
       return debug.botTotal >= 4;
     })()`,
+  );
+  const beforeShotDebug = JSON.parse(await evaluate(cdp, 'document.querySelector("#debug")?.textContent || "{}"'));
+  const beforeShotFeedback = beforeShotDebug.feedback ?? { shots: 0 };
+  const beforeTracers = beforeShotDebug.tracers ?? 0;
+  await cdp.send('Runtime.evaluate', { expression: 'window.__arenaDebug?.shoot()' });
+  await poll(
+    cdp,
+    `(() => {
+      const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
+      return debug.tracers > ${beforeTracers} && debug.feedback?.shots > ${beforeShotFeedback.shots ?? 0};
+    })()`,
+    3_000,
   );
 
   await key(cdp, 'KeyZ', 'z', 90, 900);
@@ -88,17 +102,6 @@ try {
   if (debug.local?.y !== 0 || debug.server?.y !== 0) throw new Error(`Hauteur sol inattendue: local=${debug.local?.y} server=${debug.server?.y}`);
   if (debug.botTotal < 4) throw new Error(`Bots non visibles dans le state client: ${debug.botTotal}`);
 
-  const beforeShotFeedback = debug.feedback ?? { shots: 0, audioEvents: 0 };
-  const beforeTracers = debug.tracers ?? 0;
-  await cdp.send('Runtime.evaluate', { expression: 'window.__arenaDebug?.shoot()' });
-  await poll(
-    cdp,
-    `(() => {
-      const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
-      return debug.tracers > ${beforeTracers} && debug.feedback?.shots > ${beforeShotFeedback.shots ?? 0};
-    })()`,
-    3_000,
-  );
   if (process.env.SMOKE_SCREENSHOT) await captureScreenshot(cdp, process.env.SMOKE_SCREENSHOT);
 
   if (smokeRespawn) {
@@ -223,6 +226,20 @@ function findChromePath() {
       ]
     : ['/usr/bin/google-chrome', '/usr/bin/chromium', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
   return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function readViewport() {
+  const width = Number(process.env.SMOKE_VIEWPORT_WIDTH ?? 0);
+  const height = Number(process.env.SMOKE_VIEWPORT_HEIGHT ?? 0);
+  const deviceScaleFactor = Number(process.env.SMOKE_DEVICE_SCALE_FACTOR ?? 1);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return null;
+
+  return {
+    width,
+    height,
+    deviceScaleFactor: Number.isFinite(deviceScaleFactor) && deviceScaleFactor > 0 ? deviceScaleFactor : 1,
+    mobile: process.env.SMOKE_VIEWPORT_MOBILE === '1',
+  };
 }
 
 function requestJson(method, pathName) {
@@ -395,7 +412,7 @@ function cleanup() {
 function terminate(child) {
   if (!child.pid) return;
   if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true });
+    spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true });
     return;
   }
 
