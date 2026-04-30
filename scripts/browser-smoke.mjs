@@ -3,35 +3,40 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const gameUrl = process.env.GAME_URL ?? 'http://localhost:5173/?debug=1';
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const defaultGameUrl = 'http://localhost:5173/?debug=1';
+const gameUrl = process.env.GAME_URL ?? defaultGameUrl;
 const cdpPort = Number(process.env.CDP_PORT ?? 9230 + Math.floor(Math.random() * 1000));
 const chromePath = process.env.CHROME_PATH ?? findChromePath();
 const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'krunker-cdp-'));
 const smokeRespawn = process.env.SMOKE_RESPAWN === '1';
 const browserEvents = [];
+const managedProcesses = [];
 let nextId = 1;
+let chrome;
 
 if (!chromePath) {
   console.error('Chrome introuvable. Renseigne CHROME_PATH pour lancer le smoke navigateur.');
   process.exit(1);
 }
 
-const chrome = spawn(
-  chromePath,
-  [
-    '--headless=new',
-    '--disable-gpu',
-    '--no-first-run',
-    '--no-default-browser-check',
-    `--remote-debugging-port=${cdpPort}`,
-    `--user-data-dir=${profileDir}`,
-    'about:blank',
-  ],
-  { stdio: 'ignore' },
-);
-
 try {
+  await ensureLocalGame();
+  chrome = spawn(
+    chromePath,
+    [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      `--remote-debugging-port=${cdpPort}`,
+      `--user-data-dir=${profileDir}`,
+      'about:blank',
+    ],
+    { stdio: 'ignore' },
+  );
   await waitForChrome();
   const targets = await waitForTargets();
   const page = targets.find((target) => target.type === 'page');
@@ -46,6 +51,13 @@ try {
   await poll(cdp, 'window.__arenaReady === true && Boolean(document.querySelector("#guest"))');
   await cdp.send('Runtime.evaluate', { expression: 'document.querySelector("#guest").click()' });
   await poll(cdp, 'Boolean(document.querySelector("#debug")?.textContent?.includes("sessionId"))');
+  await poll(
+    cdp,
+    `(() => {
+      const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
+      return debug.botTotal >= 4;
+    })()`,
+  );
 
   await key(cdp, 'KeyZ', 'z', 90, 900);
   await key(cdp, 'KeyS', 's', 83, 900);
@@ -60,6 +72,12 @@ try {
     pendingInputs: debug.pendingInputs,
     serverSeq: debug.serverSeq,
     spawnSeq: debug.spawnSeq,
+    bots: debug.bots,
+    botTotal: debug.botTotal,
+    humans: debug.humans,
+    humanTotal: debug.humanTotal,
+    tracers: debug.tracers,
+    feedback: debug.feedback,
     local: debug.local,
     server: debug.server,
   };
@@ -68,6 +86,20 @@ try {
   if (debug.corrections > 1) throw new Error(`Trop de corrections dures: ${debug.corrections}`);
   if (debug.predictionError > 0.5) throw new Error(`Erreur de prediction trop haute: ${debug.predictionError}`);
   if (debug.local?.y !== 0 || debug.server?.y !== 0) throw new Error(`Hauteur sol inattendue: local=${debug.local?.y} server=${debug.server?.y}`);
+  if (debug.botTotal < 4) throw new Error(`Bots non visibles dans le state client: ${debug.botTotal}`);
+
+  const beforeShotFeedback = debug.feedback ?? { shots: 0, audioEvents: 0 };
+  const beforeTracers = debug.tracers ?? 0;
+  await cdp.send('Runtime.evaluate', { expression: 'window.__arenaDebug?.shoot()' });
+  await poll(
+    cdp,
+    `(() => {
+      const debug = JSON.parse(document.querySelector("#debug")?.textContent || "{}");
+      return debug.tracers > ${beforeTracers} && debug.feedback?.shots > ${beforeShotFeedback.shots ?? 0};
+    })()`,
+    3_000,
+  );
+  if (process.env.SMOKE_SCREENSHOT) await captureScreenshot(cdp, process.env.SMOKE_SCREENSHOT);
 
   if (smokeRespawn) {
     const previousSpawnSeq = debug.spawnSeq;
@@ -98,6 +130,87 @@ try {
   throw error;
 } finally {
   cleanup();
+}
+
+async function ensureLocalGame() {
+  if (process.env.SMOKE_MANAGE_SERVERS === '0' || process.env.GAME_URL) return;
+
+  const serverUrl = 'http://127.0.0.1:2567/readyz';
+  if (!(await isHttpReady(serverUrl))) {
+    startManagedProcess(
+      ['pnpm', '--filter', '@krunker-arena/server', 'dev'],
+      '.demo-smoke-server.log',
+      {
+        ...process.env,
+        AUTH_STORE: process.env.AUTH_STORE ?? 'memory',
+        ENABLE_DEBUG_CHEATS: process.env.ENABLE_DEBUG_CHEATS ?? 'true',
+        NODE_ENV: process.env.NODE_ENV ?? 'development',
+      },
+    );
+    await waitForHttp(serverUrl, 'serveur Colyseus', '.demo-smoke-server.log', 20_000);
+  }
+
+  const clientUrl = 'http://127.0.0.1:5173/?debug=1';
+  if (!(await isHttpReady(clientUrl))) {
+    startManagedProcess(['pnpm', '--filter', '@krunker-arena/client', 'dev'], '.demo-smoke-client.log', process.env);
+    await waitForHttp(clientUrl, 'client Vite', '.demo-smoke-client.log', 20_000);
+  }
+}
+
+function startManagedProcess(args, logFile, env) {
+  const logPath = path.join(repoRoot, logFile);
+  const output = fs.openSync(logPath, 'w');
+  const launch = corepackLaunch(args);
+  const child = spawn(launch.command, launch.args, {
+    cwd: repoRoot,
+    env,
+    stdio: ['ignore', output, output],
+    windowsHide: true,
+    detached: process.platform !== 'win32',
+  });
+  child.unref();
+  managedProcesses.push(child);
+}
+
+function corepackLaunch(args) {
+  if (process.platform !== 'win32') return { command: 'corepack', args };
+  return { command: 'cmd.exe', args: ['/d', '/s', '/c', ['corepack', ...args].map(quoteCmdArg).join(' ')] };
+}
+
+function quoteCmdArg(value) {
+  if (/^[\w@/:.,=+-]+$/.test(value)) return value;
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+async function waitForHttp(url, label, logFile, timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await isHttpReady(url)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`${label} indisponible sur ${url}.\n${tailLog(logFile)}`);
+}
+
+function isHttpReady(url) {
+  return new Promise((resolve) => {
+    const request = http.get(url, (response) => {
+      response.resume();
+      resolve(response.statusCode !== undefined && response.statusCode < 500);
+    });
+    request.setTimeout(1_000, () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.on('error', () => resolve(false));
+  });
+}
+
+function tailLog(logFile) {
+  try {
+    return fs.readFileSync(path.join(repoRoot, logFile), 'utf8').split(/\r?\n/).slice(-40).join('\n');
+  } catch {
+    return `Log indisponible: ${logFile}`;
+  }
 }
 
 function findChromePath() {
@@ -222,6 +335,14 @@ async function evaluate(cdp, expression) {
   return result.result.value;
 }
 
+async function captureScreenshot(cdp, outputPath) {
+  const screenshotPath = path.resolve(repoRoot, outputPath);
+  fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+  const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+  fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+  console.log(JSON.stringify({ screenshot: screenshotPath }, null, 2));
+}
+
 async function poll(cdp, expression, timeoutMs = 12_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -252,10 +373,15 @@ async function key(cdp, code, keyValue, virtualCode, durationMs) {
 }
 
 function cleanup() {
-  try {
-    chrome.kill('SIGKILL');
-  } catch {
-    // already closed
+  if (chrome) {
+    try {
+      chrome.kill('SIGKILL');
+    } catch {
+      // already closed
+    }
+  }
+  for (const child of managedProcesses) {
+    terminate(child);
   }
   setTimeout(() => {
     try {
@@ -264,4 +390,22 @@ function cleanup() {
       // Chrome can briefly keep profile files locked on Windows.
     }
   }, 500);
+}
+
+function terminate(child) {
+  if (!child.pid) return;
+  if (process.platform === 'win32') {
+    spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true });
+    return;
+  }
+
+  try {
+    process.kill(-child.pid, 'SIGTERM');
+  } catch {
+    try {
+      child.kill('SIGTERM');
+    } catch {
+      // already closed
+    }
+  }
 }

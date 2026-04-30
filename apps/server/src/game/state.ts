@@ -16,6 +16,7 @@ export class PlayerState extends Schema {
   @type('number') deaths = 0;
   @type('number') ammo = 12;
   @type('boolean') alive = true;
+  @type('boolean') isBot = false;
   @type('number') respawnAt = 0;
 }
 

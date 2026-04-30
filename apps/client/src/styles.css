@@ -78,6 +78,31 @@ canvas {
   font-size: 14px;
 }
 
+.score-row > span:first-child {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.score-row i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #40d9ff;
+  box-shadow: 0 0 9px rgba(64, 217, 255, 0.75);
+}
+
+.score-row small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.bot-row i {
+  background: #ff9d2e;
+  box-shadow: 0 0 9px rgba(255, 157, 46, 0.75);
+}
+
 .crosshair {
   position: absolute;
   top: 50%;
@@ -107,6 +132,57 @@ canvas {
   top: 8px;
   width: 18px;
   height: 2px;
+}
+
+.hit-marker {
+  position: absolute;
+  top: calc(50% + 30px);
+  left: 50%;
+  min-width: 34px;
+  transform: translate(-50%, -50%) scale(0.9);
+  color: #fff1a8;
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 0 14px rgba(255, 241, 168, 0.95);
+  opacity: 0;
+}
+
+.hit-marker--active {
+  animation: hit-confirm 260ms ease-out;
+}
+
+.hit-marker--kill {
+  animation: kill-confirm 520ms ease-out;
+  color: #ff4d6d;
+  text-shadow: 0 0 18px rgba(255, 77, 109, 0.95);
+}
+
+.muzzle-flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130px;
+  height: 130px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%) scale(0.22);
+  background: radial-gradient(circle, rgba(255, 241, 168, 0.95), rgba(255, 157, 46, 0.36) 28%, transparent 66%);
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+
+.muzzle-flash--active {
+  animation: muzzle-pop 120ms ease-out;
+}
+
+.damage-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, transparent 42%, rgba(255, 31, 74, 0.34) 100%);
+  opacity: 0;
+}
+
+.damage-vignette--active {
+  animation: damage-pulse 340ms ease-out;
 }
 
 .bottom-strip {
@@ -141,4 +217,64 @@ canvas {
 
 .hidden {
   display: none;
+}
+
+@keyframes muzzle-pop {
+  0% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.22) rotate(0deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.05) rotate(16deg);
+  }
+}
+
+@keyframes hit-confirm {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.75);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.24);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -72%) scale(1);
+  }
+}
+
+@keyframes kill-confirm {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+
+  28% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(1.05);
+  }
+}
+
+@keyframes damage-pulse {
+  0% {
+    opacity: 0;
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
 }

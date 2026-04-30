@@ -9,6 +9,7 @@ declare global {
   interface Window {
     __arenaDebug?: {
       kill: () => void;
+      shoot: () => void;
       setLook: (yaw: number, pitch: number) => void;
       snapshot: () => Record<string, unknown>;
     };
@@ -54,11 +55,16 @@ const network = new GameNetwork({
     }
     const localPlayer = renderer.updatePlayers(players, localSessionId, pendingInputs);
     if (localPlayer) ui.setPlayerStats(localPlayer.health, localPlayer.ammo);
-    ui.setScoreboard(players.map((player) => ({ name: player.name, kills: player.kills, deaths: player.deaths })));
+    ui.setScoreboard(players.map((player) => ({ name: player.name, kills: player.kills, deaths: player.deaths, isBot: player.isBot })));
   },
   onEvent: (event) => {
-    if (event.type === 'kill') ui.showMessage('Frag confirmé');
-    else if (event.message) ui.showMessage(event.message);
+    renderer.handleServerEvent(event);
+    if (event.type === 'shot' && event.shooterId === localSessionId) ui.showShotFeedback(Boolean(event.hitId));
+    else if (event.type === 'hit' && event.shooterId === localSessionId) ui.showHitFeedback(event.damage);
+    else if (event.type === 'hit' && event.targetId === localSessionId) ui.showDamageFeedback();
+    else if (event.type === 'kill' && event.killerId === localSessionId) ui.showKillFeedback();
+    else if (event.type === 'kill' && event.victimId === localSessionId) ui.showMessage('Tu es éliminé');
+    else if (event.type === 'system') ui.showMessage(event.message);
   },
 });
 
@@ -73,8 +79,11 @@ const input = new InputController(
 if (debugEnabled) {
   window.__arenaDebug = {
     kill: () => network.debugKill(),
+    shoot: () => {
+      if (localAlive && localSpawnSeq > 0) network.shoot({ seq: 0, spawnSeq: localSpawnSeq, yaw: input.yaw, pitch: input.pitch });
+    },
     setLook: (yaw, pitch) => input.setLook(yaw, pitch),
-    snapshot: () => renderer.debugSnapshot(),
+    snapshot: () => debugSnapshot(),
   };
 }
 
@@ -109,6 +118,10 @@ function runGameplayFrame(now: number): void {
   }
   if (steps === 5) fixedStepAccumulator = 0;
 
-  if (debugEnabled) ui.setDebug(renderer.debugSnapshot());
+  if (debugEnabled) ui.setDebug(debugSnapshot());
   gameplayFrame = window.requestAnimationFrame(runGameplayFrame);
+}
+
+function debugSnapshot(): Record<string, unknown> {
+  return { ...renderer.debugSnapshot(), feedback: ui.debugSnapshot() };
 }

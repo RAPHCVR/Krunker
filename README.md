@@ -32,17 +32,19 @@ pnpm --filter @krunker-arena/server dev
 
 Pour diagnostiquer le mouvement client/serveur, ouvrir `http://localhost:5173/?debug=1`: l’overlay affiche l’écart de prédiction et le nombre de corrections dures.
 
-Avec le client et le serveur déjà lancés, le smoke navigateur automatisé se lance avec:
+Le smoke navigateur automatisé démarre le serveur et le client localement si les ports `2567` et `5173` ne répondent pas déjà:
 
 ```powershell
 pnpm smoke:browser
 ```
 
-Pour tester le respawn en local, lancer le serveur avec `ENABLE_DEBUG_CHEATS=true`, puis exécuter:
+Pour tester le respawn en local:
 
 ```powershell
 pnpm smoke:browser:respawn
 ```
+
+Si tu veux cibler un environnement déjà lancé sans gestion automatique des services locaux, utiliser `GAME_URL` ou `SMOKE_MANAGE_SERVERS=0`.
 
 ## Validation
 

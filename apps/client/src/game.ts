@@ -1,6 +1,19 @@
 import * as THREE from 'three';
-import { GAMEPLAY, MAP, createMovementState, replayMovement, simulateMovement, type ClientInput, type MovementState } from '@krunker-arena/shared';
+import { GAMEPLAY, MAP, createMovementState, replayMovement, simulateMovement, type ClientInput, type MovementState, type ServerEvent } from '@krunker-arena/shared';
 import type { PlayerSnapshot } from './network.js';
+
+const HUMAN_COLOR = 0x40d9ff;
+const BOT_COLOR = 0xff9d2e;
+const IMPACT_COLOR = 0xfff1a8;
+
+type ShotEvent = Extract<ServerEvent, { type: 'shot' }>;
+type Tracer = {
+  group: THREE.Group;
+  bornAt: number;
+  ttlMs: number;
+  materials: Array<THREE.LineBasicMaterial | THREE.MeshBasicMaterial>;
+  geometries: THREE.BufferGeometry[];
+};
 
 export class ArenaRenderer {
   readonly element: HTMLCanvasElement;
@@ -8,6 +21,8 @@ export class ArenaRenderer {
   private readonly camera = new THREE.PerspectiveCamera(76, window.innerWidth / window.innerHeight, 0.05, 250);
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   private readonly playerMeshes = new Map<string, THREE.Group>();
+  private readonly playerSnapshots = new Map<string, PlayerSnapshot>();
+  private readonly tracers: Tracer[] = [];
   private localMovement: MovementState | null = null;
   private localServerSnapshot: PlayerSnapshot | null = null;
   private correctionCount = 0;
@@ -31,9 +46,12 @@ export class ArenaRenderer {
   updatePlayers(players: PlayerSnapshot[], sessionId: string, pendingInputs: readonly ClientInput[]): PlayerSnapshot | null {
     this.sessionId = sessionId;
     const activeIds = new Set(players.map((player) => player.id));
+    this.playerSnapshots.clear();
+    for (const player of players) this.playerSnapshots.set(player.id, player);
     for (const [id, mesh] of this.playerMeshes) {
       if (!activeIds.has(id)) {
         this.scene.remove(mesh);
+        disposeObject(mesh);
         this.playerMeshes.delete(id);
       }
     }
@@ -48,7 +66,7 @@ export class ArenaRenderer {
         continue;
       }
 
-      const mesh = this.ensurePlayerMesh(player.id, player.name);
+      const mesh = this.ensurePlayerMesh(player);
       mesh.visible = player.alive;
       mesh.position.set(player.x, player.y, player.z);
       mesh.rotation.y = player.yaw;
@@ -62,9 +80,14 @@ export class ArenaRenderer {
     this.applyCamera(this.localMovement);
   }
 
+  handleServerEvent(event: ServerEvent): void {
+    if (event.type === 'shot') this.spawnShotTracer(event);
+  }
+
   debugSnapshot(): Record<string, unknown> {
     const local = this.localMovement;
     const server = this.localServerSnapshot;
+    const players = [...this.playerSnapshots.values()];
     return {
       sessionId: this.sessionId,
       serverSeq: server?.inputSeq ?? 0,
@@ -72,6 +95,11 @@ export class ArenaRenderer {
       pendingInputs: this.pendingInputCount,
       predictionError: Number(this.lastPredictionError.toFixed(3)),
       corrections: this.correctionCount,
+      bots: players.filter((player) => player.isBot && player.alive).length,
+      humans: players.filter((player) => !player.isBot && player.alive).length,
+      botTotal: players.filter((player) => player.isBot).length,
+      humanTotal: players.filter((player) => !player.isBot).length,
+      tracers: this.tracers.length,
       local: local ? roundVector(local) : null,
       server: server ? roundVector(server) : null,
     };
@@ -109,20 +137,26 @@ export class ArenaRenderer {
     this.scene.add(grid);
   }
 
-  private ensurePlayerMesh(id: string, name: string): THREE.Group {
-    const existing = this.playerMeshes.get(id);
+  private ensurePlayerMesh(player: PlayerSnapshot): THREE.Group {
+    const existing = this.playerMeshes.get(player.id);
     if (existing) return existing;
 
     const group = new THREE.Group();
-    const material = new THREE.MeshStandardMaterial({ color: 0xff4d6d, roughness: 0.45 });
+    const playerColor = player.isBot ? BOT_COLOR : HUMAN_COLOR;
+    const material = new THREE.MeshStandardMaterial({ color: playerColor, emissive: playerColor, emissiveIntensity: 0.16, roughness: 0.45 });
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 0.9, 4, 8), material);
     body.castShadow = true;
     body.position.y = GAMEPLAY.playerHeight / 2;
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.8), new THREE.MeshStandardMaterial({ color: 0x111111 }));
     barrel.position.set(0.25, GAMEPLAY.eyeHeight - 0.2, -0.55);
-    group.add(body, barrel);
-    group.name = name;
-    this.playerMeshes.set(id, group);
+    const marker = new THREE.Mesh(
+      new THREE.BoxGeometry(0.18, 0.08, 0.08),
+      new THREE.MeshBasicMaterial({ color: player.isBot ? 0xfff1a8 : 0xd6fbff }),
+    );
+    marker.position.set(0, GAMEPLAY.eyeHeight + 0.1, -0.35);
+    group.add(body, barrel, marker);
+    group.name = player.name;
+    this.playerMeshes.set(player.id, group);
     this.scene.add(group);
     return group;
   }
@@ -134,6 +168,7 @@ export class ArenaRenderer {
   }
 
   private render(): void {
+    this.updateTracers();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -163,6 +198,55 @@ export class ArenaRenderer {
     if (this.lastPredictionError > 0.35) this.correctionCount += 1;
     return replayedMovement;
   }
+
+  private spawnShotTracer(event: ShotEvent): void {
+    const start = new THREE.Vector3(event.origin.x, event.origin.y, event.origin.z);
+    const end = new THREE.Vector3(event.end.x, event.end.y, event.end.z);
+    const segment = new THREE.Vector3().subVectors(end, start);
+    const length = segment.length();
+    if (length < 0.05) return;
+
+    const direction = segment.clone().normalize();
+    if (event.shooterId === this.sessionId) start.addScaledVector(direction, Math.min(0.75, length * 0.25));
+
+    const shooter = this.playerSnapshots.get(event.shooterId);
+    const tracerColor = shooter?.isBot ? BOT_COLOR : HUMAN_COLOR;
+    const tracerMaterial = new THREE.LineBasicMaterial({ color: tracerColor, transparent: true, opacity: 0.95 });
+    const tracerGeometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+    const tracerLine = new THREE.Line(tracerGeometry, tracerMaterial);
+
+    const impactMaterial = new THREE.MeshBasicMaterial({ color: event.hitId ? IMPACT_COLOR : tracerColor, transparent: true, opacity: 0.92 });
+    const impactGeometry = new THREE.SphereGeometry(event.hitId ? 0.11 : 0.055, 8, 8);
+    const impact = new THREE.Mesh(impactGeometry, impactMaterial);
+    impact.position.copy(end);
+
+    const group = new THREE.Group();
+    group.add(tracerLine, impact);
+    this.scene.add(group);
+    this.tracers.push({
+      group,
+      bornAt: performance.now(),
+      ttlMs: event.hitId ? 280 : 220,
+      materials: [tracerMaterial, impactMaterial],
+      geometries: [tracerGeometry, impactGeometry],
+    });
+  }
+
+  private updateTracers(): void {
+    const now = performance.now();
+    for (let index = this.tracers.length - 1; index >= 0; index -= 1) {
+      const tracer = this.tracers[index]!;
+      const age = now - tracer.bornAt;
+      const opacity = 1 - age / tracer.ttlMs;
+      if (opacity <= 0) {
+        this.scene.remove(tracer.group);
+        disposeTracer(tracer);
+        this.tracers.splice(index, 1);
+        continue;
+      }
+      for (const material of tracer.materials) material.opacity = Math.max(0, opacity);
+    }
+  }
 }
 
 function roundVector(vector: { x: number; y: number; z: number; yaw?: number; pitch?: number }): Record<string, number> {
@@ -171,4 +255,22 @@ function roundVector(vector: { x: number; y: number; z: number; yaw?: number; pi
       .filter(([, value]) => typeof value === 'number')
       .map(([key, value]) => [key, Number((value as number).toFixed(3))]),
   );
+}
+
+function disposeTracer(tracer: Tracer): void {
+  for (const geometry of tracer.geometries) geometry.dispose();
+  for (const material of tracer.materials) material.dispose();
+}
+
+function disposeObject(object: THREE.Object3D): void {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.geometry) mesh.geometry.dispose();
+    const material = mesh.material;
+    if (Array.isArray(material)) {
+      for (const item of material) item.dispose();
+    } else if (material) {
+      material.dispose();
+    }
+  });
 }

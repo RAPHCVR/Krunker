@@ -1,5 +1,5 @@
 import { Client, Room } from 'colyseus.js';
-import type { ClientInput, ShootMessage } from '@krunker-arena/shared';
+import type { ClientInput, ServerEvent, ShootMessage } from '@krunker-arena/shared';
 
 export type PlayerSnapshot = {
   id: string;
@@ -16,11 +16,12 @@ export type PlayerSnapshot = {
   deaths: number;
   ammo: number;
   alive: boolean;
+  isBot: boolean;
 };
 
 export type NetworkHandlers = {
   onPlayers: (players: PlayerSnapshot[], sessionId: string) => void;
-  onEvent: (event: { type: string; message?: string; killerId?: string; victimId?: string }) => void;
+  onEvent: (event: ServerEvent) => void;
 };
 
 export class GameNetwork {
@@ -48,6 +49,7 @@ export class GameNetwork {
         deaths: player.deaths,
         ammo: player.ammo,
         alive: player.alive,
+        isBot: player.isBot === true,
       }));
       this.handlers.onPlayers(players, this.room!.sessionId);
     });

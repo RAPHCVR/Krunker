@@ -10,9 +10,10 @@ import {
   type JoinMatchOptions,
   type MovementState,
   type ShootMessage,
+  type ServerEvent,
 } from '@krunker-arena/shared';
 import { GameState, PlayerState } from './state.js';
-import { directionFromAngles, findSpawn, raycastPlayers } from './math.js';
+import { directionFromAngles, findSpawn, raycastPlayerHit } from './math.js';
 import { applyQueuedHumanInputs } from './inputQueue.js';
 
 type PlayerRuntime = {
@@ -53,6 +54,7 @@ export class DeathmatchRoom extends Room<GameState> {
     const spawn = findSpawn(this.state.players.size);
     player.id = client.sessionId;
     player.name = sanitizeDisplayName(options.displayName ?? 'Guest');
+    player.isBot = false;
     player.health = GAMEPLAY.maxHealth;
     player.ammo = GAMEPLAY.magazineSize;
     player.spawnSeq = 1;
@@ -74,6 +76,7 @@ export class DeathmatchRoom extends Room<GameState> {
     const spawn = findSpawn(index + 2);
     player.id = id;
     player.name = ['VoxelViper', 'StrafeByte', 'AimToast', 'RailDuck'][index] ?? `Bot ${index + 1}`;
+    player.isBot = true;
     player.health = GAMEPLAY.maxHealth;
     player.ammo = GAMEPLAY.magazineSize;
     player.spawnSeq = 1;
@@ -131,13 +134,27 @@ export class DeathmatchRoom extends Room<GameState> {
     shooter.ammo -= 1;
     const direction = directionFromAngles(clamp(payload.yaw, -Math.PI * 2, Math.PI * 2), clamp(payload.pitch, -1.35, 1.35));
     const origin = { x: shooter.x, y: shooter.y + GAMEPLAY.eyeHeight, z: shooter.z };
-    const targetId = raycastPlayers(origin, direction, this.state.players, playerId);
-    if (!targetId) return;
+    const hit = raycastPlayerHit(origin, direction, this.state.players, playerId);
+    const shotEvent: ServerEvent = hit
+      ? { type: 'shot', shooterId: playerId, origin, end: hit.point, hitId: hit.playerId }
+      : {
+          type: 'shot',
+          shooterId: playerId,
+          origin,
+          end: {
+            x: origin.x + direction.x * GAMEPLAY.weaponRange,
+            y: origin.y + direction.y * GAMEPLAY.weaponRange,
+            z: origin.z + direction.z * GAMEPLAY.weaponRange,
+          },
+        };
+    this.broadcast('serverEvent', shotEvent);
+    if (!hit) return;
 
+    const targetId = hit.playerId;
     const target = this.state.players.get(targetId);
     if (!target) return;
     target.health = Math.max(0, target.health - GAMEPLAY.weaponDamage);
-    this.broadcast('serverEvent', { type: 'hit', targetId, damage: GAMEPLAY.weaponDamage, health: target.health });
+    this.broadcast('serverEvent', { type: 'hit', shooterId: playerId, targetId, damage: GAMEPLAY.weaponDamage, health: target.health });
 
     if (target.health <= 0) {
       shooter.kills += 1;

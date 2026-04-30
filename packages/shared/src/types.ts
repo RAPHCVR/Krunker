@@ -23,7 +23,8 @@ export type JoinMatchOptions = {
 };
 
 export type ServerEvent =
-  | { type: 'hit'; targetId: string; damage: number; health: number }
+  | { type: 'shot'; shooterId: string; origin: Vector3Like; end: Vector3Like; hitId?: string }
+  | { type: 'hit'; shooterId: string; targetId: string; damage: number; health: number }
   | { type: 'kill'; killerId: string; victimId: string }
   | { type: 'system'; message: string };
 
